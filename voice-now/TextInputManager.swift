@@ -13,33 +13,44 @@ class TextInputManager {
     
     private init() {}
     
+    /// 使用粘贴板方式输入文本（不会触发输入法）
     func typeText(_ text: String) {
-        // 使用 CGEvent 模拟键盘输入
-        let source = CGEventSource(stateID: .hidSystemState)
+        guard !text.isEmpty else { return }
         
-        for character in text {
-            let keyCode = self.keyCodeForCharacter(character)
-            
-            if keyCode >= 0 {
-                // 对于标准按键
-                if let keyDownEvent = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(keyCode), keyDown: true) {
-                    keyDownEvent.post(tap: .cghidEventTap)
-                }
-                
-                if let keyUpEvent = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(keyCode), keyDown: false) {
-                    keyUpEvent.post(tap: .cghidEventTap)
-                }
-                
-                usleep(10000) // 10ms 延迟
-            } else {
-                // 对于 Unicode 字符（如中文）
-                self.typeUnicodeCharacter(character, source: source)
+        print("📋 准备粘贴输入文本: \(text)")
+        
+        // 1. 保存当前剪贴板的字符串内容（只保存字符串类型）
+        let pasteboard = NSPasteboard.general
+        let previousString = pasteboard.string(forType: .string)
+        
+        // 2. 将要输入的文本复制到剪贴板
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        
+        // 3. 短暂延迟，确保剪贴板更新
+        usleep(20000) // 20ms
+        
+        // 4. 模拟 Cmd+V 粘贴
+        simulatePaste()
+        
+        // 5. 延迟后恢复原剪贴板内容（只恢复字符串类型）
+        if let previousString = previousString, !previousString.isEmpty {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+                pasteboard.clearContents()
+                pasteboard.setString(previousString, forType: .string)
+                print("📋 已恢复剪贴板内容")
             }
         }
+        
+        print("✅ 文本已通过粘贴输入")
     }
     
+    /// 删除指定数量的字符（使用退格键）
     func deleteCharacters(count: Int) {
-        // 模拟按退格键删除字符
+        guard count > 0 else { return }
+        
+        print("⌫ 删除 \(count) 个字符")
+        
         let source = CGEventSource(stateID: .hidSystemState)
         let deleteKeyCode: CGKeyCode = 51 // 退格键的 keyCode
         
@@ -54,41 +65,43 @@ class TextInputManager {
                 keyUpEvent.post(tap: .cghidEventTap)
             }
             
-            usleep(5000) // 5ms 延迟（比输入快一点）
-        }
-    }
-    
-    private func typeUnicodeCharacter(_ character: Character, source: CGEventSource?) {
-        let string = String(character)
-        let utf16 = Array(string.utf16)
-        
-        for codeUnit in utf16 {
-            if let keyDownEvent = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) {
-                keyDownEvent.keyboardSetUnicodeString(stringLength: 1, unicodeString: [codeUnit])
-                keyDownEvent.post(tap: .cghidEventTap)
-            }
-            
-            if let keyUpEvent = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
-                keyUpEvent.keyboardSetUnicodeString(stringLength: 1, unicodeString: [codeUnit])
-                keyUpEvent.post(tap: .cghidEventTap)
-            }
-            
             usleep(10000) // 10ms 延迟
         }
     }
     
-    private func keyCodeForCharacter(_ character: Character) -> Int {
-        // 简化的按键映射（仅用于英文和标点）
-        let keyMap: [Character: Int] = [
-            "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8,
-            "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
-            "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "=": 24, "9": 25,
-            "7": 26, "-": 27, "8": 28, "0": 29, "]": 30, "o": 31, "u": 32, "[": 33,
-            "i": 34, "p": 35, "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42,
-            ",": 43, "/": 44, "n": 45, "m": 46, ".": 47, " ": 49
-        ]
+    /// 模拟 Cmd+V 粘贴操作
+    private func simulatePaste() {
+        let source = CGEventSource(stateID: .hidSystemState)
         
-        return keyMap[Character(character.lowercased())] ?? -1
+        // V 键的 keyCode
+        let vKeyCode: CGKeyCode = 9
+        
+        // 按下 Command 键
+        let cmdDownEvent = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Command), keyDown: true)
+        cmdDownEvent?.flags = .maskCommand
+        cmdDownEvent?.post(tap: .cghidEventTap)
+        
+        usleep(10000) // 10ms
+        
+        // 按下 V 键（同时保持 Command）
+        let vDownEvent = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true)
+        vDownEvent?.flags = .maskCommand
+        vDownEvent?.post(tap: .cghidEventTap)
+        
+        usleep(10000) // 10ms
+        
+        // 释放 V 键
+        let vUpEvent = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
+        vUpEvent?.flags = .maskCommand
+        vUpEvent?.post(tap: .cghidEventTap)
+        
+        usleep(10000) // 10ms
+        
+        // 释放 Command 键
+        let cmdUpEvent = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Command), keyDown: false)
+        cmdUpEvent?.post(tap: .cghidEventTap)
+        
+        usleep(20000) // 20ms，等待粘贴完成
     }
 }
 

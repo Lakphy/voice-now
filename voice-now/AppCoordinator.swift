@@ -40,8 +40,8 @@ class AppCoordinator: ObservableObject {
             }
         }
         
-        // 请求辅助功能权限并启动监听（带重试机制）
-        startMonitoringWithRetry()
+        // 请求辅助功能权限并启动监听
+        startMonitoring()
     }
     
     func terminate() {
@@ -65,7 +65,7 @@ class AppCoordinator: ObservableObject {
         hideFloatingWindow()
     }
     
-    private func startMonitoringWithRetry(retryCount: Int = 0) {
+    func startMonitoring() {
         // 先请求权限（会弹出系统提示）
         GlobalHotkeyMonitor.shared.requestAccessibilityPermission()
         
@@ -87,14 +87,7 @@ class AppCoordinator: ObservableObject {
                 print("🎯 快捷键回调已设置")
             } else {
                 print("❌ 全局快捷键监听启动失败 - 需要在「系统设置 > 隐私与安全性 > 辅助功能」中授权")
-                
-                // 开发模式：10秒后自动重试（最多3次）
-                if retryCount < 3 {
-                    print("🔄 将在 10 秒后自动重试... (第 \(retryCount + 1)/3 次)")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
-                        self.startMonitoringWithRetry(retryCount: retryCount + 1)
-                    }
-                }
+                print("💡 请在系统设置中授权后，点击界面上的「刷新」按钮重试")
             }
         }
     }

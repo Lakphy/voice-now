@@ -167,9 +167,14 @@ struct ContentView: View {
             }
         }
         
-        // 检查辅助功能权限
+        // 检查辅助功能权限并重新尝试启动监听
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.hasAccessibilityPermission = self.coordinator.checkAccessibilityPermission()
+            
+            // 如果权限已授予但监听未启动，尝试启动
+            if self.hasAccessibilityPermission {
+                self.coordinator.startMonitoring()
+            }
         }
     }
     
