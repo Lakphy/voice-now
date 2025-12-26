@@ -33,7 +33,7 @@ class HistoryManager: ObservableObject {
     @Published var histories: [RecognitionHistory] = []
     
     private let saveKey = "recognitionHistories"
-    private let maxHistoryCount = 100 // 最多保存100条
+    private let maxHistoryCount = 1000 // 最多保存1000条
     
     private init() {
         loadHistories()
@@ -50,13 +50,17 @@ class HistoryManager: ObservableObject {
             // 添加到开头
             self.histories.insert(history, at: 0)
             
-            // 限制数量
+            // 限制数量（最多100条，防止内存和性能问题）
             if self.histories.count > self.maxHistoryCount {
                 self.histories = Array(self.histories.prefix(self.maxHistoryCount))
             }
             
-            self.saveHistories()
-            print("📝 已保存历史记录: \(text)")
+            // 异步保存到磁盘，不阻塞主线程
+            DispatchQueue.global(qos: .utility).async {
+                self.saveHistories()
+            }
+            
+            print("📝 已添加历史记录 (共 \(self.histories.count) 条): \(text.prefix(20))...")
         }
     }
     
@@ -64,15 +68,26 @@ class HistoryManager: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.histories.remove(atOffsets: offsets)
-            self.saveHistories()
+            
+            // 异步保存，不阻塞UI
+            DispatchQueue.global(qos: .utility).async {
+                self.saveHistories()
+            }
         }
     }
     
     func clearAll() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            let count = self.histories.count
             self.histories.removeAll()
-            self.saveHistories()
+            
+            // 异步保存，不阻塞UI
+            DispatchQueue.global(qos: .utility).async {
+                self.saveHistories()
+            }
+            
+            print("🗑️ 已清空 \(count) 条历史记录")
         }
     }
     

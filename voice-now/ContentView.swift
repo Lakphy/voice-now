@@ -164,8 +164,14 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 20)
                         } else {
+                            // 显示记录总数
+                            Text("\(historyManager.histories.count) 条记录")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            
+                            // 使用 LazyVStack 实现懒加载，提升性能
                             ScrollView {
-                                VStack(spacing: 8) {
+                                LazyVStack(spacing: 8) {
                                     ForEach(historyManager.histories) { history in
                                         HistoryRow(history: history)
                                     }
@@ -295,6 +301,7 @@ struct CompactInstructionRow: View {
 
 struct HistoryRow: View {
     let history: RecognitionHistory
+    @State private var isHovered = false
     
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -311,22 +318,37 @@ struct HistoryRow: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            // 复制按钮
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(history.text, forType: .string)
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+            // 复制按钮（只在悬停时显示）
+            if isHovered {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(history.text, forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("复制")
+                .transition(.opacity)
             }
-            .buttonStyle(.plain)
-            .help("复制")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color(.controlBackgroundColor).opacity(0.5))
+        .background(Color(.controlBackgroundColor).opacity(isHovered ? 0.7 : 0.5))
         .cornerRadius(6)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+// 实现 Equatable 优化重绘性能
+extension RecognitionHistory: Equatable {
+    static func == (lhs: RecognitionHistory, rhs: RecognitionHistory) -> Bool {
+        lhs.id == rhs.id
     }
 }
 
