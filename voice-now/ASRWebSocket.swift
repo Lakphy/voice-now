@@ -30,6 +30,12 @@ class ASRWebSocket: NSObject, ObservableObject {
         print("🔌 开始连接 WebSocket...")
         isManuallyClosed = false
         
+        // 清空上次的识别结果和错误信息
+        DispatchQueue.main.async {
+            self.recognitionText = ""
+            self.errorMessage = nil
+        }
+        
         // 先清理旧连接
         if webSocketTask != nil {
             print("⚠️ 检测到旧连接，先清理")
@@ -94,7 +100,8 @@ class ASRWebSocket: NSObject, ObservableObject {
         self.webSocketTask?.cancel(with: .goingAway, reason: nil)
         self.webSocketTask = nil
         self.isConnected = false
-        self.recognitionText = ""
+        // 不在这里清空 recognitionText，让用户能看到最终结果
+        // recognitionText 会在下次 connect() 时清空
         self.taskId = ""
         print("✅ WebSocket 已完全断开")
     }
@@ -241,6 +248,7 @@ class ASRWebSocket: NSObject, ObservableObject {
                     
                     // 更新显示的文本（中间结果和最终结果都显示）
                     self.recognitionText = text
+                    print("📺 更新悬浮窗显示: '\(text)' (最终结果: \(sentenceEnd))")
                     
                     // 调用回调，传递文本和是否是最终结果
                     self.onResultGenerated?(text, sentenceEnd)

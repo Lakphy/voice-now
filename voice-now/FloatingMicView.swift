@@ -37,17 +37,22 @@ struct FloatingMicView: View {
                 .font(.headline)
                 .foregroundColor(.primary)
             
-            // 识别结果
-            if !webSocket.recognitionText.isEmpty {
+            // 识别结果区域（始终显示）
+            VStack(alignment: .leading, spacing: 4) {
+                Text("识别结果：")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
                 ScrollView {
-                    Text(webSocket.recognitionText)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding()
+                    Text(webSocket.recognitionText.isEmpty ? "等待识别..." : webSocket.recognitionText)
+                        .font(.system(size: 16))
+                        .foregroundColor(webSocket.recognitionText.isEmpty ? .secondary : .primary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
                 }
-                .frame(maxHeight: 100)
-                .background(Color.gray.opacity(0.1))
+                .frame(height: 80)
+                .background(Color.gray.opacity(0.15))
                 .cornerRadius(8)
             }
             
@@ -73,7 +78,7 @@ struct FloatingMicView: View {
             .buttonStyle(.bordered)
         }
         .padding(24)
-        .frame(width: 300)
+        .frame(width: 320)
         .background(
             VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
         )

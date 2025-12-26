@@ -19,8 +19,6 @@ class AppCoordinator: ObservableObject {
     private var config = ConfigManager.shared
     
     private var floatingWindow: NSWindow?
-    private var lastInputText = ""  // 上次输入的文本（用于计算差异）
-    private var inputCharCount = 0  // 已输入的字符数（用于删除）
     private var isProcessing = false  // 是否正在处理输入（防止重复启动）
     private let processingQueue = DispatchQueue(label: "com.voice-now.processing", qos: .userInitiated)
     private var cancellables = Set<AnyCancellable>()
@@ -105,64 +103,6 @@ class AppCoordinator: ObservableObject {
         return AXIsProcessTrusted()
     }
     
-    private func typeIncrementalText(newText: String) {
-        // 注意：此方法在后台线程调用，避免阻塞主线程
-        
-        // 获取当前状态（需要线程安全访问）
-        let currentLastText = self.lastInputText
-        let currentInputCount = self.inputCharCount
-        
-        // 如果新文本比上次短，说明识别回退了，需要删除多余的字符
-        if newText.count < currentLastText.count {
-            let deleteCount = currentLastText.count - newText.count
-            print("⬅️ 删除 \(deleteCount) 个字符")
-            TextInputManager.shared.deleteCharacters(count: deleteCount)
-            
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.inputCharCount = max(0, self.inputCharCount - deleteCount)
-            }
-        }
-        
-        // 找出新增的文本部分
-        if newText.hasPrefix(currentLastText) {
-            // 新文本是旧文本的扩展，输入新增部分
-            let newPart = String(newText.dropFirst(currentLastText.count))
-            if !newPart.isEmpty {
-                print("⌨️ 输入新增部分: \(newPart)")
-                TextInputManager.shared.typeText(newPart)
-                
-                DispatchQueue.main.async { [weak self] in
-                    self?.inputCharCount += newPart.count
-                }
-            }
-        } else {
-            // 识别结果完全不同，删除所有旧的，输入全新的
-            if currentInputCount > 0 {
-                print("🔄 识别结果变化，删除 \(currentInputCount) 个字符，重新输入")
-                TextInputManager.shared.deleteCharacters(count: currentInputCount)
-            }
-            
-            if !newText.isEmpty {
-                print("⌨️ 输入新文本: \(newText)")
-                TextInputManager.shared.typeText(newText)
-                
-                DispatchQueue.main.async { [weak self] in
-                    self?.inputCharCount = newText.count
-                }
-            } else {
-                DispatchQueue.main.async { [weak self] in
-                    self?.inputCharCount = 0
-                }
-            }
-        }
-        
-        // 更新状态
-        DispatchQueue.main.async { [weak self] in
-            self?.lastInputText = newText
-        }
-    }
-    
     private func setupCallbacks() {
         // 设置音频数据回调
         audioRecorder.onAudioData = { [weak self] data in
@@ -174,56 +114,24 @@ class AppCoordinator: ObservableObject {
             guard let self = self else { return }
             
             if isFinal {
-                // 句子结束，删除中间输入的文本，输入最终正确的文本
-                let currentCount = self.inputCharCount
-                let currentText = self.lastInputText
+                // 句子结束，直接将最终文本输入到文本框
+                print("✅ 最终结果: '\(text)'，准备输入到文本框")
                 
-                print("✅ 最终结果: '\(text)' (当前已输入 \(currentCount) 个字符: '\(currentText)')")
+                // 检查最终文本是否为空
+                if text.isEmpty {
+                    print("⚠️ 最终文本为空，跳过输入")
+                    return
+                }
                 
-                // 使用串行队列执行输入操作，避免并发问题
-                self.processingQueue.async { [weak self] in
-                    guard let self = self else { return }
-                    
-                    // 检查最终文本是否为空
-                    if text.isEmpty {
-                        print("⚠️ 最终文本为空，保留中间结果，不执行删除操作")
-                        // 不删除，保留当前已输入的文本
-                        return
-                    }
-                    
-                    // 检查最终文本是否与当前文本相同
-                    if text == currentText {
-                        print("✅ 最终文本与当前文本相同，无需修改")
-                        // 重置状态即可，无需删除重输
-                        DispatchQueue.main.async { [weak self] in
-                            self?.lastInputText = ""
-                            self?.inputCharCount = 0
-                        }
-                        return
-                    }
-                    
-                    // 删除之前输入的所有中间文本
-                    if currentCount > 0 {
-                        TextInputManager.shared.deleteCharacters(count: currentCount)
-                        print("🗑️ 已删除 \(currentCount) 个中间字符")
-                    }
-                    
-                    // 输入最终的正确文本
+                // 使用串行队列执行输入操作
+                self.processingQueue.async {
+                    print("⌨️ 开始输入最终文本...")
                     TextInputManager.shared.typeText(text)
-                    print("📝 最终输入完成: \(text)")
-                    
-                    // 回到主线程重置状态
-                    DispatchQueue.main.async { [weak self] in
-                        self?.lastInputText = ""
-                        self?.inputCharCount = 0
-                    }
+                    print("📝 最终文本输入完成: \(text)")
                 }
             } else {
-                // 中间结果，使用串行队列实时输入差异部分
-                print("⏳ 中间结果: '\(text)'")
-                self.processingQueue.async { [weak self] in
-                    self?.typeIncrementalText(newText: text)
-                }
+                // 中间结果，只在悬浮窗内显示（WebSocket 的 recognitionText 会自动更新）
+                print("⏳ 中间结果（仅显示）: '\(text)'")
             }
         }
         
@@ -265,8 +173,6 @@ class AppCoordinator: ObservableObject {
                     // 延迟一下确保资源释放
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                         guard let self = self else { return }
-                        self.lastInputText = ""
-                        self.inputCharCount = 0
                         self.isProcessing = false
                         self.hasReceivedTaskFinished = false  // 重置标志
                         print("✅ 识别会话已完全关闭，可以开始新的会话")
@@ -351,8 +257,6 @@ class AppCoordinator: ObservableObject {
         // 标记为处理中
         isProcessing = true
         isRecording = true
-        lastInputText = ""
-        inputCharCount = 0
         hasReceivedTaskFinished = false  // 重置标志
         
         // 显示新窗口
@@ -571,8 +475,6 @@ class AppCoordinator: ObservableObject {
                 self.webSocket.disconnect()
                 self.hideFloatingWindow()
                 
-                self.lastInputText = ""
-                self.inputCharCount = 0
                 self.isProcessing = false
                 self.hasReceivedTaskFinished = false  // 重置标志
                 print("✅ 会话已强制关闭")

@@ -14,179 +14,143 @@ struct ContentView: View {
     @State private var hasAccessibilityPermission = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // 头部
-                VStack(spacing: 12) {
-                    Image(systemName: "mic.circle.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.accentColor)
-                    
+        VStack(spacing: 20) {
+            // 头部 - 紧凑版
+            HStack(spacing: 12) {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Voice Now")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                     
-                    Text("实时语音识别工具")
-                        .font(.title3)
+                    Text("实时语音识别")
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 
-                Divider()
+                Spacer()
                 
-                // API 配置区域
-                GroupBox(label: Label("API 配置", systemImage: "key.fill")) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("API Key")
-                                .font(.headline)
-                            
-                            SecureField("请输入阿里云百炼 API Key", text: $config.apiKey)
-                                .textFieldStyle(.roundedBorder)
-                            
-                            Link("获取 API Key", destination: URL(string: "https://help.aliyun.com/zh/model-studio/get-api-key")!)
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("服务区域")
-                                .font(.headline)
-                            
-                            Picker("", selection: $config.region) {
-                                ForEach(ConfigManager.Region.allCases, id: \.self) { region in
-                                    Text(region.displayName).tag(region)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        
-                        HStack {
-                            Image(systemName: config.isConfigured ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(config.isConfigured ? .green : .orange)
-                            Text(config.isConfigured ? "API Key 已配置" : "请配置 API Key")
-                                .font(.caption)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-                
-                // 权限状态
-                GroupBox(label: Label("权限状态", systemImage: "checkmark.shield.fill")) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Image(systemName: hasMicPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(hasMicPermission ? .green : .orange)
-                            Text(hasMicPermission ? "麦克风权限已授予" : "需要麦克风权限")
-                        }
-                        
-                        HStack {
-                            Image(systemName: hasAccessibilityPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(hasAccessibilityPermission ? .green : .orange)
-                            Text(hasAccessibilityPermission ? "辅助功能权限已授予" : "需要辅助功能权限")
-                            
-                            if !hasAccessibilityPermission {
-                                Button("打开系统设置") {
-                                    openAccessibilitySettings()
-                                }
-                                .buttonStyle(.link)
-                                .font(.caption)
-                            }
-                        }
-                        
-                        HStack {
-                            Image(systemName: coordinator.isRecording ? "record.circle.fill" : "circle")
-                                .foregroundColor(coordinator.isRecording ? .red : .gray)
-                            Text(coordinator.isRecording ? "正在录音中..." : "未在录音")
-                        }
-                        
-                        Button("刷新权限状态") {
-                            checkPermissions()
-                        }
-                        .buttonStyle(.bordered)
-                        .font(.caption)
-                    }
-                    .padding(.vertical, 8)
-                }
-                
-                // 权限说明（如果未授予）
-                if !hasAccessibilityPermission {
-                    GroupBox {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
-                                Text("需要授予辅助功能权限")
-                                    .font(.headline)
-                            }
-                            
-                            Text("为了实现全局快捷键监听，需要授予辅助功能权限：")
-                                .font(.body)
-                            
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("1. 点击下方按钮打开系统设置")
-                                Text("2. 在左侧选择「隐私与安全性」")
-                                Text("3. 点击「辅助功能」")
-                                Text("4. 找到「voice-now」并打开开关")
-                                Text("5. 授权后稍等片刻，应用会自动重试")
-                            }
+                // 录音状态
+                if coordinator.isRecording {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 8, height: 8)
+                        Text("录音中")
                             .font(.caption)
-                            .padding(.leading, 8)
-                            
-                            Button("打开系统设置") {
-                                openAccessibilitySettings()
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        .padding(.vertical, 8)
+                            .foregroundColor(.red)
                     }
                 }
-                
-                // 使用说明
-                GroupBox(label: Label("使用方法", systemImage: "info.circle.fill")) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .top, spacing: 8) {
-                            Text("1.")
-                            Text("配置好上方的 API Key")
-                        }
-                        
-                        HStack(alignment: .top, spacing: 8) {
-                            Text("2.")
-                            Text("在任意应用中按下右 Command 键激活语音识别")
-                        }
-                        
-                        HStack(alignment: .top, spacing: 8) {
-                            Text("3.")
-                            Text("对着麦克风说话，识别结果会自动输入")
-                        }
-                        
-                        HStack(alignment: .top, spacing: 8) {
-                            Text("4.")
-                            Text("再次按右 Command 键关闭识别")
-                        }
-                        
-                        HStack(alignment: .top, spacing: 8) {
-                            Text("5.")
-                            Text("关闭此窗口后，应用继续在后台运行")
-                        }
-                    }
-                    .font(.body)
-                    .padding(.vertical, 8)
-                }
-                
-                // 测试按钮
-                Button {
-                    coordinator.toggleRecording()
-                } label: {
-                    Label(coordinator.isRecording ? "停止测试" : "测试识别", systemImage: coordinator.isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(!config.isConfigured || !hasAccessibilityPermission)
             }
-            .padding(32)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            
+            Divider()
+            
+            ScrollView {
+                VStack(spacing: 16) {
+                    // 快速状态
+                    HStack(spacing: 12) {
+                        MiniStatusCard(icon: "key.fill", isActive: config.isConfigured)
+                        MiniStatusCard(icon: "mic.fill", isActive: hasMicPermission)
+                        MiniStatusCard(icon: "hand.point.up.braille.fill", isActive: hasAccessibilityPermission)
+                    }
+                    
+                    // API 配置
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("API 配置", systemImage: "key.fill")
+                            .font(.headline)
+                        
+                        VStack(spacing: 8) {
+                            SecureField("阿里云百炼 API Key", text: $config.apiKey)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.callout, design: .monospaced))
+                            
+                            HStack {
+                                Link("获取 API Key", destination: URL(string: "https://help.aliyun.com/zh/model-studio/get-api-key")!)
+                                    .font(.caption2)
+                                
+                                Spacer()
+                                
+                                Picker("", selection: $config.region) {
+                                    ForEach(ConfigManager.Region.allCases, id: \.self) { region in
+                                        Text(region.displayName).tag(region)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .labelsHidden()
+                                .frame(width: 180)
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(.controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(10)
+                    
+                    // 权限提示（紧凑版）
+                    if !hasAccessibilityPermission || !hasMicPermission {
+                        VStack(spacing: 10) {
+                            if !hasAccessibilityPermission {
+                                CompactPermissionBox(
+                                    icon: "hand.point.up.braille.fill",
+                                    title: "需要辅助功能权限",
+                                    action: openAccessibilitySettings
+                                )
+                            }
+                            
+                            if !hasMicPermission {
+                                CompactPermissionBox(
+                                    icon: "mic.fill",
+                                    title: "需要麦克风权限",
+                                    action: nil
+                                )
+                            }
+                            
+                            Button {
+                                checkPermissions()
+                            } label: {
+                                Label("刷新", systemImage: "arrow.clockwise")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                    
+                    // 使用说明 - 紧凑版
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("使用方法", systemImage: "lightbulb.fill")
+                            .font(.headline)
+                        
+                        VStack(alignment: .leading, spacing: 6) {
+                            CompactInstructionRow(number: "1", text: "配置 API Key")
+                            CompactInstructionRow(number: "2", text: "按 右⌘ 键开始说话")
+                            CompactInstructionRow(number: "3", text: "再按 右⌘ 键完成输入")
+                        }
+                        
+                        Text("💡 关闭窗口后应用继续在后台运行")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                    }
+                    .padding(12)
+                    .background(Color.blue.opacity(0.05))
+                    .cornerRadius(10)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+            }
         }
-        .frame(minWidth: 650, minHeight: 700)
+        .frame(minWidth: 480, minHeight: 420)
+        .background(Color(.windowBackgroundColor))
         .onAppear {
             checkPermissions()
         }
@@ -212,6 +176,82 @@ struct ContentView: View {
     private func openAccessibilitySettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         NSWorkspace.shared.open(url)
+    }
+}
+
+// MARK: - UI Components
+
+struct MiniStatusCard: View {
+    let icon: String
+    let isActive: Bool
+    
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(isActive ? .green : .orange)
+            
+            Circle()
+                .fill(isActive ? Color.green : Color.orange)
+                .frame(width: 6, height: 6)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isActive ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
+        )
+    }
+}
+
+struct CompactPermissionBox: View {
+    let icon: String
+    let title: String
+    let action: (() -> Void)?
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundColor(.orange)
+                .frame(width: 20)
+            
+            Text(title)
+                .font(.subheadline)
+            
+            Spacer()
+            
+            if let action = action {
+                Button("设置") {
+                    action()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+struct CompactInstructionRow: View {
+    let number: String
+    let text: String
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(number)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(Color.blue))
+            
+            Text(text)
+                .font(.subheadline)
+            
+            Spacer()
+        }
     }
 }
 
