@@ -102,6 +102,14 @@ class AppCoordinator: ObservableObject {
             self?.webSocket.sendAudioData(data)
         }
         
+        // 设置任务启动回调（可以开始说话时播放提示音）
+        webSocket.onTaskStarted = { [weak self] in
+            guard let self = self else { return }
+            print("🔔 播放提示音：可以开始说话了")
+            // 播放系统提示音
+            NSSound.beep()
+        }
+        
         // 设置识别结果回调
         webSocket.onResultGenerated = { [weak self] text, isFinal in
             guard let self = self else { return }

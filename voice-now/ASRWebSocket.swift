@@ -20,6 +20,7 @@ class ASRWebSocket: NSObject, ObservableObject {
     var onResultGenerated: ((String, Bool) -> Void)?  // (text, isFinal)
     var onConnected: (() -> Void)?  // 连接成功回调
     var onConnectionFailed: (() -> Void)?  // 连接失败回调
+    var onTaskStarted: (() -> Void)?  // 任务已启动回调（可以开始说话）
     var onTaskFinished: (() -> Void)?  // 任务完成回调（收到 task-finished）
     
     override init() {
@@ -236,8 +237,9 @@ class ASRWebSocket: NSObject, ObservableObject {
         DispatchQueue.main.async {
             switch event {
             case "task-started":
-                print("任务已启动")
+                print("✅ 任务已启动，可以开始说话")
                 self.isConnected = true
+                self.onTaskStarted?()
                 
             case "result-generated":
                 if let payload = json["payload"] as? [String: Any],
