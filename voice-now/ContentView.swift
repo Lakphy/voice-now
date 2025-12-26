@@ -8,238 +8,190 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var audioRecorder = AudioRecorder()
-    @StateObject private var webSocket = ASRWebSocket()
     @ObservedObject private var config = ConfigManager.shared
-    @State private var showingFloatingMic = false
-    @State private var hasPermissions = false
-    @State private var lastRecognizedText = ""
+    @ObservedObject private var coordinator = AppCoordinator.shared
+    @State private var hasMicPermission = false
+    @State private var hasAccessibilityPermission = false
     
     var body: some View {
-        ZStack {
-            // 主界面
-            VStack(spacing: 24) {
-                Image(systemName: "mic.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.accentColor)
+        VStack(spacing: 24) {
+            Image(systemName: "mic.circle.fill")
+                .font(.system(size: 80))
+                .foregroundColor(.accentColor)
+            
+            Text("Voice Now")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            
+            Text("实时语音识别工具")
+                .font(.title3)
+                .foregroundColor(.secondary)
+            
+            Divider()
+                .padding(.vertical)
+            
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: config.isConfigured ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(config.isConfigured ? .green : .red)
+                    Text(config.isConfigured ? "已配置 API Key" : "未配置 API Key")
+                }
                 
-                Text("Voice Now")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                HStack {
+                    Image(systemName: hasMicPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(hasMicPermission ? .green : .orange)
+                    Text(hasMicPermission ? "麦克风权限已授予" : "需要麦克风权限")
+                }
                 
-                Text("实时语音识别工具")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-                
-                Divider()
-                    .padding(.vertical)
-                
-                VStack(spacing: 16) {
-                    HStack {
-                        Image(systemName: config.isConfigured ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundColor(config.isConfigured ? .green : .red)
-                        Text(config.isConfigured ? "已配置 API Key" : "未配置 API Key")
-                    }
+                HStack {
+                    Image(systemName: hasAccessibilityPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(hasAccessibilityPermission ? .green : .orange)
+                    Text(hasAccessibilityPermission ? "辅助功能权限已授予" : "需要辅助功能权限")
                     
-                    HStack {
-                        Image(systemName: hasPermissions ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundColor(hasPermissions ? .green : .orange)
-                        Text(hasPermissions ? "已授予权限" : "需要麦克风和辅助功能权限")
+                    if !hasAccessibilityPermission {
+                        Button("打开系统设置") {
+                            openAccessibilitySettings()
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
                     }
                 }
-                .font(.body)
                 
-                Divider()
-                    .padding(.vertical)
-                
+                HStack {
+                    Image(systemName: coordinator.isRecording ? "record.circle.fill" : "circle")
+                        .foregroundColor(coordinator.isRecording ? .red : .gray)
+                    Text(coordinator.isRecording ? "正在录音中..." : "未在录音")
+                }
+            }
+            .font(.body)
+            
+            Divider()
+                .padding(.vertical)
+            
+            // 权限说明
+            if !hasAccessibilityPermission {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("使用方法：")
-                        .font(.headline)
-                    
-                    HStack(alignment: .top) {
-                        Text("1.")
-                        Text("点击下方「打开设置」配置 API Key")
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("需要辅助功能权限")
+                            .font(.headline)
                     }
                     
-                    HStack(alignment: .top) {
-                        Text("2.")
-                        Text("按下右 Command 键激活语音识别")
-                    }
+                    Text("为了实现全局快捷键监听，需要授予辅助功能权限：")
+                        .font(.body)
                     
-                    HStack(alignment: .top) {
-                        Text("3.")
-                        Text("对着麦克风说话，识别结果会自动输入")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("1. 点击下方「打开系统设置」按钮")
+                        Text("2. 在左侧选择「隐私与安全性」")
+                        Text("3. 点击「辅助功能」")
+                        Text("4. 找到「voice-now」并打开开关")
+                        Text("5. 授权后稍等片刻，应用会自动重试连接（无需重启）")
                     }
+                    .font(.caption)
+                    .padding(.leading, 8)
                     
-                    HStack(alignment: .top) {
-                        Text("4.")
-                        Text("再次按右 Command 键关闭识别")
+                    HStack {
+                        Button("打开系统设置") {
+                            openAccessibilitySettings()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        
+                        Text("💡 开发提示：应用会每 10 秒自动重试")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
-                .background(Color.gray.opacity(0.1))
+                .background(Color.orange.opacity(0.1))
                 .cornerRadius(8)
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                Text("使用方法：")
+                    .font(.headline)
                 
-                Spacer()
+                HStack(alignment: .top) {
+                    Text("1.")
+                    Text("点击下方「打开设置」配置 API Key")
+        }
                 
-                HStack(spacing: 16) {
-                    Button("打开设置") {
-                        openSettings()
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    Button("测试识别") {
-                        testRecognition()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!config.isConfigured)
+                HStack(alignment: .top) {
+                    Text("2.")
+                    Text("在任意应用中按下右 Command 键激活语音识别")
+                }
+                
+                HStack(alignment: .top) {
+                    Text("3.")
+                    Text("对着麦克风说话，识别结果会自动输入")
+                }
+                
+                HStack(alignment: .top) {
+                    Text("4.")
+                    Text("再次按右 Command 键关闭识别")
+                }
+                
+                HStack(alignment: .top) {
+                    Text("5.")
+                    Text("关闭此窗口后，应用继续在后台运行")
                 }
             }
-            .padding(40)
-            .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(8)
             
-            // 悬浮麦克风窗口
-            if showingFloatingMic {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        closeFloatingMic()
-                    }
+            Spacer()
+            
+            HStack(spacing: 16) {
+                Button("打开设置") {
+                    openSettings()
+                }
+                .buttonStyle(.bordered)
                 
-                FloatingMicView(
-                    recorder: audioRecorder,
-                    webSocket: webSocket,
-                    isVisible: $showingFloatingMic
-                )
+                Button("刷新权限状态") {
+                    checkPermissions()
+                }
+                .buttonStyle(.bordered)
+                
+                Button("测试识别") {
+                    coordinator.toggleRecording()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!config.isConfigured || !hasAccessibilityPermission)
             }
         }
+        .padding(40)
+        .frame(maxWidth: 600)
         .onAppear {
-            setupApplication()
-        }
-        .onChange(of: showingFloatingMic) { newValue in
-            if !newValue {
-                closeFloatingMic()
-            }
+            checkPermissions()
         }
     }
     
-    private func setupApplication() {
-        // 异步请求麦克风权限
+    private func checkPermissions() {
+        // 检查麦克风权限
         DispatchQueue.global(qos: .userInitiated).async {
-            self.audioRecorder.requestPermission { granted in
+            let audioRecorder = AudioRecorder()
+            audioRecorder.requestPermission { granted in
                 DispatchQueue.main.async {
-                    self.hasPermissions = granted
+                    self.hasMicPermission = granted
                 }
             }
         }
         
-        // 异步设置全局快捷键监听
-        DispatchQueue.global(qos: .userInitiated).async {
-            let monitor = GlobalHotkeyMonitor.shared
-            let started = monitor.startMonitoring()
-            
-            DispatchQueue.main.async {
-                if started {
-                    self.hasPermissions = true
-                }
-                
-                monitor.onRightCommandPressed = {
-                    self.toggleRecording()
-                }
-            }
-        }
-        
-        // 设置音频数据回调
-        audioRecorder.onAudioData = { data in
-            self.webSocket.sendAudioData(data)
-        }
-        
-        // 设置识别结果回调
-        webSocket.onResultGenerated = { text in
-            // 只输入新增的文本
-            DispatchQueue.main.async {
-                if text != self.lastRecognizedText {
-                    let newText = text.replacingOccurrences(of: self.lastRecognizedText, with: "")
-                    if !newText.isEmpty {
-                        TextInputManager.shared.typeText(newText)
-                    }
-                    self.lastRecognizedText = text
-                }
-            }
-        }
-    }
-    
-    private func toggleRecording() {
-        print("🎤 切换录音状态...")
-        
-        if !config.isConfigured {
-            print("⚠️ API Key 未配置")
-            return
-        }
-        
-        if showingFloatingMic {
-            print("⏹️ 停止录音")
-            closeFloatingMic()
-        } else {
-            print("▶️ 开始录音")
-            openFloatingMic()
-        }
-    }
-    
-    private func openFloatingMic() {
-        showingFloatingMic = true
-        lastRecognizedText = ""
-        
-        // 异步连接 WebSocket
-        DispatchQueue.global(qos: .userInitiated).async {
-            self.webSocket.connect()
-            
-            // 等待连接建立，最多等待 3 秒
-            var waitCount = 0
-            while !self.webSocket.isConnected && waitCount < 30 {
-                Thread.sleep(forTimeInterval: 0.1)
-                waitCount += 1
-            }
-            
-            DispatchQueue.main.async {
-                if self.webSocket.isConnected {
-                    print("✅ WebSocket 已连接")
-                    self.webSocket.startTask()
-                    
-                    // 等待任务启动后开始录音
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        self.audioRecorder.startRecording()
-                    }
-                } else {
-                    print("❌ WebSocket 连接超时")
-                    self.webSocket.errorMessage = "连接超时，请检查网络和 API Key"
-                    // 自动关闭悬浮窗
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        self.showingFloatingMic = false
-                    }
-                }
-            }
-        }
-    }
-    
-    private func closeFloatingMic() {
-        audioRecorder.stopRecording()
-        webSocket.finishTask()
-        
+        // 检查辅助功能权限
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            webSocket.disconnect()
-            showingFloatingMic = false
-            lastRecognizedText = ""
+            self.hasAccessibilityPermission = self.coordinator.checkAccessibilityPermission()
         }
     }
     
-    private func testRecognition() {
-        toggleRecording()
+    private func openAccessibilitySettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
     
     private func openSettings() {
-        // 打开设置窗口
         if let window = NSApplication.shared.windows.first(where: { $0.identifier?.rawValue == "settings" }) {
             window.makeKeyAndOrderFront(nil)
         } else {

@@ -38,6 +38,26 @@ class TextInputManager {
         }
     }
     
+    func deleteCharacters(count: Int) {
+        // 模拟按退格键删除字符
+        let source = CGEventSource(stateID: .hidSystemState)
+        let deleteKeyCode: CGKeyCode = 51 // 退格键的 keyCode
+        
+        for _ in 0..<count {
+            // 按下退格键
+            if let keyDownEvent = CGEvent(keyboardEventSource: source, virtualKey: deleteKeyCode, keyDown: true) {
+                keyDownEvent.post(tap: .cghidEventTap)
+            }
+            
+            // 释放退格键
+            if let keyUpEvent = CGEvent(keyboardEventSource: source, virtualKey: deleteKeyCode, keyDown: false) {
+                keyUpEvent.post(tap: .cghidEventTap)
+            }
+            
+            usleep(5000) // 5ms 延迟（比输入快一点）
+        }
+    }
+    
     private func typeUnicodeCharacter(_ character: Character, source: CGEventSource?) {
         let string = String(character)
         let utf16 = Array(string.utf16)

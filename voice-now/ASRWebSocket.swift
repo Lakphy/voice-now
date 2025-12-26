@@ -11,12 +11,15 @@ import Combine
 class ASRWebSocket: NSObject, ObservableObject {
     private var webSocketTask: URLSessionWebSocketTask?
     private var taskId: String = ""
+    private var isManuallyClosed = false  // 用于区分主动断开导致的 cancelled
     
     @Published var isConnected = false
     @Published var errorMessage: String?
     @Published var recognitionText = ""
     
-    var onResultGenerated: ((String) -> Void)?
+    var onResultGenerated: ((String, Bool) -> Void)?  // (text, isFinal)
+    var onConnected: (() -> Void)?  // 连接成功回调
+    var onConnectionFailed: (() -> Void)?  // 连接失败回调
     
     override init() {
         super.init()
@@ -24,16 +27,28 @@ class ASRWebSocket: NSObject, ObservableObject {
     
     func connect() {
         print("🔌 开始连接 WebSocket...")
+        isManuallyClosed = false
+        
+        // 先清理旧连接
+        if webSocketTask != nil {
+            print("⚠️ 检测到旧连接，先清理")
+            webSocketTask?.cancel(with: .goingAway, reason: nil)
+            webSocketTask = nil
+        }
         
         guard !ConfigManager.shared.apiKey.isEmpty else {
-            errorMessage = "请先配置 API Key"
+            DispatchQueue.main.async {
+                self.errorMessage = "请先配置 API Key"
+            }
             print("❌ API Key 为空")
             return
         }
         
         let urlString = ConfigManager.shared.region.rawValue
         guard let url = URL(string: urlString) else {
-            errorMessage = "无效的 URL"
+            DispatchQueue.main.async {
+                self.errorMessage = "无效的 URL"
+            }
             print("❌ URL 无效: \(urlString)")
             return
         }
@@ -55,9 +70,31 @@ class ASRWebSocket: NSObject, ObservableObject {
     }
     
     func disconnect() {
-        webSocketTask?.cancel(with: .goingAway, reason: nil)
-        webSocketTask = nil
-        isConnected = false
+        print("📡 准备断开 WebSocket...")
+        isManuallyClosed = true
+        
+        // 清理回调
+        onConnected = nil
+        onConnectionFailed = nil
+        
+        // 立即执行清理，而不是 dispatch async
+        // 如果不在主线程，才 dispatch
+        if Thread.isMainThread {
+            self.performDisconnect()
+        } else {
+            DispatchQueue.main.async {
+                self.performDisconnect()
+            }
+        }
+    }
+    
+    private func performDisconnect() {
+        self.webSocketTask?.cancel(with: .goingAway, reason: nil)
+        self.webSocketTask = nil
+        self.isConnected = false
+        self.recognitionText = ""
+        self.taskId = ""
+        print("✅ WebSocket 已完全断开")
     }
     
     func startTask() {
@@ -112,6 +149,12 @@ class ASRWebSocket: NSObject, ObservableObject {
     }
     
     private func sendJSON(_ json: [String: Any]) {
+        // 打印发送的消息
+        if let prettyData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
+           let prettyString = String(data: prettyData, encoding: .utf8) {
+            print("📤 发送 WebSocket 消息:\n\(prettyString)")
+        }
+
         guard let jsonData = try? JSONSerialization.data(withJSONObject: json),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             return
@@ -146,15 +189,34 @@ class ASRWebSocket: NSObject, ObservableObject {
                 self.receiveMessage()
                 
             case .failure(let error):
+                let nsError = error as NSError
+                
+                // 如果是我们主动断开或系统返回的 cancelled（如 stop 时的取消），忽略
+                if self.isManuallyClosed || nsError.code == NSURLErrorCancelled {
+                    print("ℹ️ 接收被取消（可能是主动断开），忽略错误: \(error.localizedDescription)")
+                    return
+                }
+                
                 DispatchQueue.main.async {
                     self.errorMessage = "接收消息失败: \(error.localizedDescription)"
                     self.isConnected = false
+                    self.onConnectionFailed?()
                 }
             }
         }
     }
     
     private func handleMessage(_ text: String) {
+        // 打印接收的消息（格式化 JSON）
+        if let data = text.data(using: .utf8),
+           let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []),
+           let prettyData = try? JSONSerialization.data(withJSONObject: jsonObject, options: .prettyPrinted),
+           let prettyString = String(data: prettyData, encoding: .utf8) {
+            print("📥 收到 WebSocket 消息:\n\(prettyString)")
+        } else {
+            print("📥 收到 WebSocket 消息 (原始): \(text)")
+        }
+        
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let header = json["header"] as? [String: Any],
@@ -172,12 +234,23 @@ class ASRWebSocket: NSObject, ObservableObject {
                 if let payload = json["payload"] as? [String: Any],
                    let output = payload["output"] as? [String: Any],
                    let sentence = output["sentence"] as? [String: Any],
-                   let text = sentence["text"] as? String {
+                   let text = sentence["text"] as? String,
+                   let sentenceEnd = sentence["sentence_end"] as? Bool {
                     
+                    // 更新显示的文本（中间结果和最终结果都显示）
                     self.recognitionText = text
-                    self.onResultGenerated?(text)
                     
-                    print("识别结果: \(text)")
+                    // 调用回调，传递文本和是否是最终结果
+                    self.onResultGenerated?(text, sentenceEnd)
+                    
+                    if sentenceEnd {
+                        print("✅ 最终识别结果: \(text)")
+                    } else {
+                        // 只在文本有实际内容时打印中间结果
+                        if !text.isEmpty {
+                            print("⏳ 中间: \(text)")
+                        }
+                    }
                 }
                 
             case "task-finished":
@@ -201,6 +274,7 @@ extension ASRWebSocket: URLSessionWebSocketDelegate {
         print("✅ WebSocket 连接成功")
         DispatchQueue.main.async {
             self.isConnected = true
+            self.onConnected?()
         }
     }
     

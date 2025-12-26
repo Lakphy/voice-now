@@ -95,24 +95,38 @@ class AudioRecorder: NSObject, ObservableObject {
             
             audioEngine.prepare()
             try audioEngine.start()
-            isRecording = true
-            errorMessage = nil
+            
+            DispatchQueue.main.async {
+                self.isRecording = true
+                self.errorMessage = nil
+            }
             print("✅ 音频录制已启动")
             
         } catch {
-            errorMessage = "录音启动失败: \(error.localizedDescription)"
+            DispatchQueue.main.async {
+                self.errorMessage = "录音启动失败: \(error.localizedDescription)"
+            }
             print("录音错误: \(error)")
         }
     }
     
     func stopRecording() {
-        guard isRecording else { return }
+        // 使用 audioEngine 作为更可靠的检查（线程安全）
+        guard let engine = audioEngine else {
+            DispatchQueue.main.async { [weak self] in
+                self?.isRecording = false
+            }
+            return
+        }
         
         inputNode?.removeTap(onBus: 0)
-        audioEngine?.stop()
+        engine.stop()
         audioEngine = nil
         inputNode = nil
-        isRecording = false
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.isRecording = false
+        }
         print("⏹️ 音频录制已停止")
     }
 }
