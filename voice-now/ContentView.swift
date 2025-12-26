@@ -149,7 +149,7 @@ struct ContentView: View {
                 .padding(.bottom, 16)
             }
         }
-        .frame(minWidth: 480, minHeight: 420)
+        .frame(width: 460, height: 400)
         .background(Color(.windowBackgroundColor))
         .onAppear {
             checkPermissions()
