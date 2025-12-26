@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject private var config = ConfigManager.shared
     @ObservedObject private var coordinator = AppCoordinator.shared
+    @ObservedObject private var historyManager = HistoryManager.shared
     @State private var hasMicPermission = false
     @State private var hasAccessibilityPermission = false
     
@@ -135,12 +136,53 @@ struct ContentView: View {
                     .padding(12)
                     .background(Color.blue.opacity(0.05))
                     .cornerRadius(10)
+                    
+                    // 历史记录
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Label("历史记录", systemImage: "clock.fill")
+                                .font(.headline)
+                            
+                            Spacer()
+                            
+                            if !historyManager.histories.isEmpty {
+                                Button {
+                                    historyManager.clearAll()
+                                } label: {
+                                    Text("清空")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                        
+                        if historyManager.histories.isEmpty {
+                            Text("暂无历史记录")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 20)
+                        } else {
+                            ScrollView {
+                                VStack(spacing: 8) {
+                                    ForEach(historyManager.histories) { history in
+                                        HistoryRow(history: history)
+                                    }
+                                }
+                            }
+                            .frame(height: 150)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(10)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
             }
         }
-        .frame(width: 460, height: 400)
+        .frame(width: 460, height: 600)
         .background(Color(.windowBackgroundColor))
         .onAppear {
             checkPermissions()
@@ -248,6 +290,43 @@ struct CompactInstructionRow: View {
             
             Spacer()
         }
+    }
+}
+
+struct HistoryRow: View {
+    let history: RecognitionHistory
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            // 时间戳
+            Text(history.formattedTime)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .leading)
+            
+            // 识别内容
+            Text(history.text)
+                .font(.system(size: 12))
+                .foregroundColor(.primary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            // 复制按钮
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(history.text, forType: .string)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("复制")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(6)
     }
 }
 

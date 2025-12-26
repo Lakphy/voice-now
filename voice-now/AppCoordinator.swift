@@ -136,6 +136,9 @@ class AppCoordinator: ObservableObject {
                     return
                 }
                 
+                // 保存到历史记录
+                HistoryManager.shared.addHistory(text: text)
+                
                 // 使用串行队列执行输入操作
                 self.processingQueue.async {
                     print("⌨️ 开始输入最终文本...")

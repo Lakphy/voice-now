@@ -17,7 +17,7 @@ struct voice_nowApp: App {
             ContentView()
         }
         .windowResizability(.contentSize)
-        .defaultSize(width: 460, height: 400)
+        .defaultSize(width: 460, height: 600)
     }
 }
 
