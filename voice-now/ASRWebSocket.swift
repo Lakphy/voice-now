@@ -51,7 +51,7 @@ class ASRWebSocket: NSObject, ObservableObject {
             return
         }
         
-        let urlString = ConfigManager.shared.region.rawValue
+        let urlString = ConfigManager.shared.region
         guard let url = URL(string: urlString) else {
             DispatchQueue.main.async {
                 self.errorMessage = "无效的 URL"

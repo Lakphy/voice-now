@@ -42,12 +42,13 @@ class GlobalHotkeyMonitor: ObservableObject {
             options: .defaultTap,
             eventsOfInterest: CGEventMask(eventMask),
             callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
-                guard let refcon = refcon else { return Unmanaged.passRetained(event) }
+                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
                 
                 let monitor = Unmanaged<GlobalHotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
                 monitor.handleEvent(type: type, event: event)
                 
-                return Unmanaged.passRetained(event)
+                // 重要：不拦截事件，让其他应用也能收到
+                return Unmanaged.passUnretained(event)
             },
             userInfo: UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         ) else {
@@ -87,25 +88,18 @@ class GlobalHotkeyMonitor: ObservableObject {
     private func handleEvent(type: CGEventType, event: CGEvent) {
         guard type == .flagsChanged else { return }
         
-        let flags = event.flags
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         
-        // 调试：打印所有 Command 键事件
-        if flags.contains(.maskCommand) {
-            print("🎹 检测到 Command 键事件 - keyCode: \(keyCode)")
-        }
-        
-        // 右 Command 键的 keyCode 是 54
+        // 只处理右 Command 键（keyCode 54），其他按键直接忽略
         guard keyCode == 54 else { return }
         
+        let flags = event.flags
         let commandPressed = flags.contains(.maskCommand)
-        
-        print("✋ 右 Command 键状态变化: \(commandPressed ? "按下" : "释放")")
         
         // 检测右 Command 键按下（从未按下到按下）
         if commandPressed && !isRightCommandPressed {
             isRightCommandPressed = true
-            print("🚀 触发回调: onRightCommandPressed")
+            print("🎤 右 Command 键按下，触发语音识别")
             DispatchQueue.main.async {
                 self.onRightCommandPressed?()
             }

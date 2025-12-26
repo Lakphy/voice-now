@@ -79,15 +79,6 @@ struct ContentView: View {
                                     .font(.caption2)
                                 
                                 Spacer()
-                                
-                                Picker("", selection: $config.region) {
-                                    ForEach(ConfigManager.Region.allCases, id: \.self) { region in
-                                        Text(region.displayName).tag(region)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                .labelsHidden()
-                                .frame(width: 180)
                             }
                         }
                     }
