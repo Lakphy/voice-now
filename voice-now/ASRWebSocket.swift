@@ -110,7 +110,7 @@ class ASRWebSocket: NSObject, ObservableObject {
                 "task_group": "audio",
                 "task": "asr",
                 "function": "recognition",
-                "model": "fun-asr-realtime",
+                "model": "qwen3-asr-flash-realtime",
                 "parameters": [
                     "format": "pcm",
                     "sample_rate": ConfigManager.shared.sampleRate

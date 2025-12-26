@@ -16,32 +16,6 @@ struct voice_nowApp: App {
         WindowGroup {
             ContentView()
         }
-        .commands {
-            CommandGroup(after: .appInfo) {
-                Button("设置...") {
-                    openSettings()
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
-        }
-    }
-    
-    private func openSettings() {
-        if let window = NSApplication.shared.windows.first(where: { $0.identifier?.rawValue == "settings" }) {
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            let settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            settingsWindow.title = "设置"
-            settingsWindow.contentView = NSHostingView(rootView: SettingsView())
-            settingsWindow.center()
-            settingsWindow.makeKeyAndOrderFront(nil)
-            settingsWindow.identifier = NSUserInterfaceItemIdentifier("settings")
-        }
     }
 }
 
@@ -65,7 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationWillTerminate(_ notification: Notification) {
         print("👋 应用将退出")
-        GlobalHotkeyMonitor.shared.stopMonitoring()
+        AppCoordinator.shared.terminate()
     }
 }
 

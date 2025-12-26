@@ -44,6 +44,24 @@ class AppCoordinator: ObservableObject {
         startMonitoringWithRetry()
     }
     
+    func terminate() {
+        print("🛑 应用即将退出，强制清理资源")
+        // 立即停止所有活动，不等待队列
+        GlobalHotkeyMonitor.shared.stopMonitoring()
+        
+        // 确保音频引擎停止
+        audioRecorder.stopRecording()
+        
+        // 确保 WebSocket 断开
+        webSocket.disconnect()
+        
+        connectionTimer?.invalidate()
+        connectionTimer = nil
+        cancellables.removeAll()
+        
+        hideFloatingWindow()
+    }
+    
     private func startMonitoringWithRetry(retryCount: Int = 0) {
         // 先请求权限（会弹出系统提示）
         GlobalHotkeyMonitor.shared.requestAccessibilityPermission()
@@ -182,11 +200,12 @@ class AppCoordinator: ObservableObject {
             }
         }
         
-        // 监听 WebSocket 错误并弹窗提示
+        // 监听 WebSocket 错误（只打印日志，不弹窗）
         webSocket.$errorMessage
             .compactMap { $0 }
             .sink { [weak self] errorMsg in
                 guard let self = self else { return }
+                print("❌ WebSocket 错误: \(errorMsg)")
                 DispatchQueue.main.async {
                     // 停止录音并关闭浮窗
                     if self.isRecording {
@@ -195,7 +214,6 @@ class AppCoordinator: ObservableObject {
                         self.hideFloatingWindow()
                     }
                     self.isProcessing = false
-                    self.showAlert(title: "连接/识别错误", message: errorMsg)
                 }
             }
             .store(in: &cancellables)
@@ -213,9 +231,7 @@ class AppCoordinator: ObservableObject {
         }
         
         if !config.isConfigured {
-            print("⚠️ API Key 未配置")
-            // 显示提示窗口
-            showAlert(title: "未配置", message: "请先在主窗口配置 API Key")
+            print("⚠️ API Key 未配置，请先在主窗口配置")
             return
         }
         
@@ -296,13 +312,13 @@ class AppCoordinator: ObservableObject {
         // 连接失败回调（例如握手失败）
         webSocket.onConnectionFailed = { [weak self] in
             guard let self = self else { return }
+            print("❌ WebSocket 连接失败，请检查网络和 API Key")
             DispatchQueue.main.async {
                 self.webSocket.errorMessage = "连接失败，请检查网络和 API Key"
                 self.isProcessing = false
                 if self.isRecording {
                     self.stopRecording()
                 }
-                self.showAlert(title: "连接失败", message: "请检查网络和 API Key")
             }
         }
         
@@ -314,13 +330,12 @@ class AppCoordinator: ObservableObject {
             }
             
             if !self.webSocket.isConnected {
-                print("❌ WebSocket 连接超时")
+                print("❌ WebSocket 连接超时，请检查网络和 API Key")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     self.webSocket.errorMessage = "连接超时，请检查网络和 API Key"
                     self.isProcessing = false
                     self.stopRecording()
-                    self.showAlert(title: "连接超时", message: "请检查网络和 API Key，稍后再试")
                 }
             }
             timer.invalidate()
@@ -441,21 +456,6 @@ class AppCoordinator: ObservableObject {
             print("✅ 悬浮窗口已关闭")
         }
         floatingWindow = nil
-    }
-    
-    private func showAlert(title: String, message: String) {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in
-                self?.showAlert(title: title, message: message)
-            }
-            return
-        }
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "确定")
-        alert.runModal()
     }
 }
 
