@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E4867E7F2EFED2DA005932E7 /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = E4867E7E2EFED2DA005932E7 /* HotKey */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		E4867E6F2EFED17B005932E7 /* voice-now.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "voice-now.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E4867E7F2EFED2DA005932E7 /* HotKey in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = "voice-now";
 			packageProductDependencies = (
+				E4867E7E2EFED2DA005932E7 /* HotKey */,
 			);
 			productName = "voice-now";
 			productReference = E4867E6F2EFED17B005932E7 /* voice-now.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = E4867E662EFED17B005932E7;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E4867E7D2EFED2DA005932E7 /* XCRemoteSwiftPackageReference "HotKey" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E4867E702EFED17B005932E7 /* Products */;
 			projectDirPath = "";
@@ -251,11 +260,12 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风进行语音识别";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "需要控制其他应用程序以输入文本";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -281,11 +291,12 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风进行语音识别";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "需要控制其他应用程序以输入文本";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -325,6 +336,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E4867E7D2EFED2DA005932E7 /* XCRemoteSwiftPackageReference "HotKey" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/soffes/HotKey";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E4867E7E2EFED2DA005932E7 /* HotKey */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E4867E7D2EFED2DA005932E7 /* XCRemoteSwiftPackageReference "HotKey" */;
+			productName = HotKey;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E4867E672EFED17B005932E7 /* Project object */;
 }
