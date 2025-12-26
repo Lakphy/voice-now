@@ -25,6 +25,7 @@ class AppCoordinator: ObservableObject {
     private let processingQueue = DispatchQueue(label: "com.voice-now.processing", qos: .userInitiated)
     private var cancellables = Set<AnyCancellable>()
     private var connectionTimer: Timer?  // 连接超时定时器
+    private var finishTimer: Timer?  // finish-task 超时定时器
     
     private init() {
         setupCallbacks()
@@ -57,6 +58,8 @@ class AppCoordinator: ObservableObject {
         
         connectionTimer?.invalidate()
         connectionTimer = nil
+        finishTimer?.invalidate()
+        finishTimer = nil
         cancellables.removeAll()
         
         hideFloatingWindow()
@@ -196,6 +199,47 @@ class AppCoordinator: ObservableObject {
                 // 中间结果，使用串行队列实时输入差异部分
                 self.processingQueue.async { [weak self] in
                     self?.typeIncrementalText(newText: text)
+                }
+            }
+        }
+        
+        // 设置任务完成回调（收到 task-finished 事件）
+        webSocket.onTaskFinished = { [weak self] in
+            guard let self = self else { return }
+            print("🎯 收到 task-finished，等待文本输入队列完成...")
+            
+            // 立即取消超时定时器（同步执行，确保不会再触发）
+            if Thread.isMainThread {
+                self.finishTimer?.invalidate()
+                self.finishTimer = nil
+                print("✅ 已取消超时定时器")
+            } else {
+                DispatchQueue.main.sync {
+                    self.finishTimer?.invalidate()
+                    self.finishTimer = nil
+                    print("✅ 已取消超时定时器")
+                }
+            }
+            
+            // 使用串行队列的 barrier，确保所有之前的文本输入操作都完成
+            self.processingQueue.async { [weak self] in
+                guard let self = self else { return }
+                print("✅ 所有文本输入操作已完成，准备关闭")
+                
+                // 回到主线程关闭窗口和断开连接
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.webSocket.disconnect()
+                    self.hideFloatingWindow()
+                    
+                    // 延迟一下确保资源释放
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        guard let self = self else { return }
+                        self.lastInputText = ""
+                        self.inputCharCount = 0
+                        self.isProcessing = false
+                        print("✅ 识别会话已完全关闭，可以开始新的会话")
+                    }
                 }
             }
         }
@@ -353,44 +397,40 @@ class AppCoordinator: ObservableObject {
             }
             return
         }
-        print("⏹️ 停止录音")
+        print("⏹️ 用户结束说话，停止录音")
         
-        // 清理定时器
+        // 清理连接定时器
         connectionTimer?.invalidate()
         connectionTimer = nil
         
-        // 标记为处理中，防止重复操作
-        isProcessing = true
+        // 标记状态（但不立即清理）
         isRecording = false
         
-        // 在后台线程处理停止操作，避免阻塞主线程
-        processingQueue.async { [weak self] in
-            guard let self = self else { return }
+        // 停止音频录制
+        audioRecorder.stopRecording()
+        print("🎤 音频录制已停止")
+        
+        // 发送 finish-task 指令
+        webSocket.finishTask()
+        print("📤 已发送 finish-task，等待服务端返回 task-finished...")
+        
+        // 设置超时定时器（如果 5 秒内没收到 task-finished，强制关闭）
+        finishTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
             
-            self.audioRecorder.stopRecording()
-            print("🎤 录音已停止")
-            
-            self.webSocket.finishTask()
-            print("📤 已发送 finish-task")
-            
-            // 等待 WebSocket 处理完成
-            Thread.sleep(forTimeInterval: 1.0)
-            
+            print("⚠️ 等待 task-finished 超时，强制关闭")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                self.webSocket.disconnect()
-                self.hideFloatingWindow()
-                
-                // 等待更长时间确保所有输入操作完成和资源释放
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                    guard let self = self else { return }
-                    self.lastInputText = ""
-                    self.inputCharCount = 0
-                    self.isProcessing = false
-                    print("✅ 识别会话已关闭，可以开始新的会话")
-                }
+                self.forceCloseSession()
             }
+            timer.invalidate()
         }
+        
+        // 注意：不在这里关闭窗口和断开连接
+        // 等待 onTaskFinished 回调处理后续流程
     }
     
     private func showFloatingWindow() {
@@ -456,6 +496,40 @@ class AppCoordinator: ObservableObject {
             print("✅ 悬浮窗口已关闭")
         }
         floatingWindow = nil
+    }
+    
+    private func forceCloseSession() {
+        // 确保在主线程执行
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.forceCloseSession()
+            }
+            return
+        }
+        
+        print("🚨 强制关闭会话")
+        
+        // 取消所有定时器
+        finishTimer?.invalidate()
+        finishTimer = nil
+        
+        // 使用串行队列等待所有文本输入操作完成
+        processingQueue.async { [weak self] in
+            guard let self = self else { return }
+            print("✅ 文本输入队列已清空，强制关闭")
+            
+            // 回到主线程关闭窗口和断开连接
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.webSocket.disconnect()
+                self.hideFloatingWindow()
+                
+                self.lastInputText = ""
+                self.inputCharCount = 0
+                self.isProcessing = false
+                print("✅ 会话已强制关闭")
+            }
+        }
     }
 }
 

@@ -20,6 +20,7 @@ class ASRWebSocket: NSObject, ObservableObject {
     var onResultGenerated: ((String, Bool) -> Void)?  // (text, isFinal)
     var onConnected: (() -> Void)?  // 连接成功回调
     var onConnectionFailed: (() -> Void)?  // 连接失败回调
+    var onTaskFinished: (() -> Void)?  // 任务完成回调（收到 task-finished）
     
     override init() {
         super.init()
@@ -73,9 +74,10 @@ class ASRWebSocket: NSObject, ObservableObject {
         print("📡 准备断开 WebSocket...")
         isManuallyClosed = true
         
-        // 清理回调
+        // 清理所有回调
         onConnected = nil
         onConnectionFailed = nil
+        onTaskFinished = nil
         
         // 立即执行清理，而不是 dispatch async
         // 如果不在主线程，才 dispatch
@@ -110,7 +112,7 @@ class ASRWebSocket: NSObject, ObservableObject {
                 "task_group": "audio",
                 "task": "asr",
                 "function": "recognition",
-                "model": "qwen3-asr-flash-realtime",
+                "model": "fun-asr-realtime",
                 "parameters": [
                     "format": "pcm",
                     "sample_rate": ConfigManager.shared.sampleRate
@@ -254,7 +256,8 @@ class ASRWebSocket: NSObject, ObservableObject {
                 }
                 
             case "task-finished":
-                print("任务已完成")
+                print("✅ 服务端返回 task-finished，任务已完成")
+                self.onTaskFinished?()
                 
             case "task-failed":
                 if let errorMsg = header["error_message"] as? String {
