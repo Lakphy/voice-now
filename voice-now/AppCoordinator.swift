@@ -96,18 +96,30 @@ class AppCoordinator: ObservableObject {
         return AXIsProcessTrusted()
     }
     
+    private func playReadySound() {
+        print("🔔 播放提示音：可以开始说话了")
+        
+        // 使用系统内置的清脆提示音
+        if let sound = NSSound(named: "Tink") {
+            sound.play()
+            print("✅ 提示音已播放")
+        } else {
+            // 备用方案：使用系统默认 beep
+            NSSound.beep()
+            print("✅ 系统 beep 已播放")
+        }
+    }
+    
     private func setupCallbacks() {
         // 设置音频数据回调
         audioRecorder.onAudioData = { [weak self] data in
             self?.webSocket.sendAudioData(data)
         }
         
-        // 设置任务启动回调（可以开始说话时播放提示音）
+        // 设置任务启动回调（任务已启动，但还没有开始录音）
         webSocket.onTaskStarted = { [weak self] in
             guard let self = self else { return }
-            print("🔔 播放提示音：可以开始说话了")
-            // 播放系统提示音
-            NSSound.beep()
+            print("✅ 服务端任务已启动，准备开始录音")
         }
         
         // 设置识别结果回调
@@ -285,6 +297,10 @@ class AppCoordinator: ObservableObject {
                 guard let self = self else { return }
                 self.audioRecorder.startRecording()
                 print("✅ 音频录制已启动")
+                
+                // 播放提示音：可以开始说话了
+                self.playReadySound()
+                
                 // 启动成功，解除处理标志
                 self.isProcessing = false
             }
