@@ -26,6 +26,7 @@ class AppCoordinator: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var connectionTimer: Timer?  // 连接超时定时器
     private var finishTimer: Timer?  // finish-task 超时定时器
+    private var hasReceivedTaskFinished = false  // 是否已收到 task-finished 事件
     
     private init() {
         setupCallbacks()
@@ -60,6 +61,7 @@ class AppCoordinator: ObservableObject {
         connectionTimer = nil
         finishTimer?.invalidate()
         finishTimer = nil
+        hasReceivedTaskFinished = false
         cancellables.removeAll()
         
         hideFloatingWindow()
@@ -174,15 +176,36 @@ class AppCoordinator: ObservableObject {
             if isFinal {
                 // 句子结束，删除中间输入的文本，输入最终正确的文本
                 let currentCount = self.inputCharCount
-                print("✅ 最终结果，删除 \(currentCount) 个字符，输入正确文本")
+                let currentText = self.lastInputText
+                
+                print("✅ 最终结果: '\(text)' (当前已输入 \(currentCount) 个字符: '\(currentText)')")
                 
                 // 使用串行队列执行输入操作，避免并发问题
                 self.processingQueue.async { [weak self] in
                     guard let self = self else { return }
                     
+                    // 检查最终文本是否为空
+                    if text.isEmpty {
+                        print("⚠️ 最终文本为空，保留中间结果，不执行删除操作")
+                        // 不删除，保留当前已输入的文本
+                        return
+                    }
+                    
+                    // 检查最终文本是否与当前文本相同
+                    if text == currentText {
+                        print("✅ 最终文本与当前文本相同，无需修改")
+                        // 重置状态即可，无需删除重输
+                        DispatchQueue.main.async { [weak self] in
+                            self?.lastInputText = ""
+                            self?.inputCharCount = 0
+                        }
+                        return
+                    }
+                    
                     // 删除之前输入的所有中间文本
                     if currentCount > 0 {
                         TextInputManager.shared.deleteCharacters(count: currentCount)
+                        print("🗑️ 已删除 \(currentCount) 个中间字符")
                     }
                     
                     // 输入最终的正确文本
@@ -197,6 +220,7 @@ class AppCoordinator: ObservableObject {
                 }
             } else {
                 // 中间结果，使用串行队列实时输入差异部分
+                print("⏳ 中间结果: '\(text)'")
                 self.processingQueue.async { [weak self] in
                     self?.typeIncrementalText(newText: text)
                 }
@@ -205,19 +229,25 @@ class AppCoordinator: ObservableObject {
         
         // 设置任务完成回调（收到 task-finished 事件）
         webSocket.onTaskFinished = { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                print("⚠️ onTaskFinished 回调执行时 self 已释放")
+                return
+            }
             print("🎯 收到 task-finished，等待文本输入队列完成...")
             
-            // 立即取消超时定时器（同步执行，确保不会再触发）
-            if Thread.isMainThread {
-                self.finishTimer?.invalidate()
-                self.finishTimer = nil
-                print("✅ 已取消超时定时器")
-            } else {
-                DispatchQueue.main.sync {
-                    self.finishTimer?.invalidate()
+            // 立即标记已收到 task-finished（必须在主线程）
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                print("🏁 设置标志: hasReceivedTaskFinished = true")
+                self.hasReceivedTaskFinished = true
+                
+                // 取消超时定时器
+                if let timer = self.finishTimer {
+                    print("🛑 取消超时定时器")
+                    timer.invalidate()
                     self.finishTimer = nil
-                    print("✅ 已取消超时定时器")
+                } else {
+                    print("⚠️ 超时定时器已经不存在")
                 }
             }
             
@@ -238,6 +268,7 @@ class AppCoordinator: ObservableObject {
                         self.lastInputText = ""
                         self.inputCharCount = 0
                         self.isProcessing = false
+                        self.hasReceivedTaskFinished = false  // 重置标志
                         print("✅ 识别会话已完全关闭，可以开始新的会话")
                     }
                 }
@@ -322,6 +353,7 @@ class AppCoordinator: ObservableObject {
         isRecording = true
         lastInputText = ""
         inputCharCount = 0
+        hasReceivedTaskFinished = false  // 重置标志
         
         // 显示新窗口
         showFloatingWindow()
@@ -403,6 +435,10 @@ class AppCoordinator: ObservableObject {
         connectionTimer?.invalidate()
         connectionTimer = nil
         
+        // 重置 task-finished 标志
+        print("🔄 重置标志: hasReceivedTaskFinished = false")
+        hasReceivedTaskFinished = false
+        
         // 标记状态（但不立即清理）
         isRecording = false
         
@@ -415,8 +451,19 @@ class AppCoordinator: ObservableObject {
         print("📤 已发送 finish-task，等待服务端返回 task-finished...")
         
         // 设置超时定时器（如果 5 秒内没收到 task-finished，强制关闭）
+        print("⏱️ 设置 5 秒超时定时器")
         finishTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] timer in
             guard let self = self else {
+                print("⚠️ 定时器触发时 self 已释放")
+                timer.invalidate()
+                return
+            }
+            
+            print("⏰ 超时定时器触发，检查标志: hasReceivedTaskFinished = \(self.hasReceivedTaskFinished)")
+            
+            // 检查是否已收到 task-finished
+            if self.hasReceivedTaskFinished {
+                print("✅ 已收到 task-finished，忽略超时")
                 timer.invalidate()
                 return
             }
@@ -527,6 +574,7 @@ class AppCoordinator: ObservableObject {
                 self.lastInputText = ""
                 self.inputCharCount = 0
                 self.isProcessing = false
+                self.hasReceivedTaskFinished = false  // 重置标志
                 print("✅ 会话已强制关闭")
             }
         }

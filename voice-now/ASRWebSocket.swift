@@ -74,10 +74,10 @@ class ASRWebSocket: NSObject, ObservableObject {
         print("📡 准备断开 WebSocket...")
         isManuallyClosed = true
         
-        // 清理所有回调
+        // 只清理临时回调（连接相关的）
+        // onTaskFinished 是长期回调，不应该在这里清理
         onConnected = nil
         onConnectionFailed = nil
-        onTaskFinished = nil
         
         // 立即执行清理，而不是 dispatch async
         // 如果不在主线程，才 dispatch
@@ -257,7 +257,12 @@ class ASRWebSocket: NSObject, ObservableObject {
                 
             case "task-finished":
                 print("✅ 服务端返回 task-finished，任务已完成")
-                self.onTaskFinished?()
+                if let callback = self.onTaskFinished {
+                    print("📞 调用 onTaskFinished 回调")
+                    callback()
+                } else {
+                    print("⚠️ onTaskFinished 回调为 nil，无法调用")
+                }
                 
             case "task-failed":
                 if let errorMsg = header["error_message"] as? String {
